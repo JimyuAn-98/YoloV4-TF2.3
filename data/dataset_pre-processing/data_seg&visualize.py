@@ -6,6 +6,9 @@ Include function:
         2.2 The bndboxes' coordinates are re-calculated
         2.3 Three quarters of the images are pure background
     3. Save the new data into VOC format
+    4. Visualize the bndboxes in images
+    5. Plot the size, aspect ratio, and number distribution of the box as a graph, and save these info into CSVs
+    6. Run in multi-process mode
 """
 
 import os
@@ -22,18 +25,18 @@ import csv
 import math
 import random
 
-flags.DEFINE_string('xml_path', '../../data/VOCtraintest_11-May-2012/VOCdevkit/VOC2012/Annotations', 'path to anno dir')
-flags.DEFINE_string('img_path', '../../data/classes/voc2012.names', 'path to a list of class names')
-flags.DEFINE_string('img_output', '../../data/dataset/voc2012_train.txt', 'path to a file for train')
-flags.DEFINE_string('img_v_output', '../../data/dataset/voc2012_train.txt', 'path to a file for train')
-flags.DEFINE_string('csv_output', '../../data/dataset/voc2012_train.txt', 'path to a file for train')
-flags.DEFINE_string('xml_output', '../../data/dataset/voc2012_train.txt', 'path to a file for train')
+
+flags.DEFINE_string('xml_path', './data/voc', 'path to anno dir')
+flags.DEFINE_string('img_path', './data/img', 'path to images')
+flags.DEFINE_string('img_output', './data/img_cut', 'path to the output images')
+flags.DEFINE_string('img_v_output', './data/img_v_output', 'path to the visualized output images')
+flags.DEFINE_string('csv_output', './data/csv', 'path to csv')
+flags.DEFINE_string('xml_output', './data/new_xml', 'path to new XMLs')
 
 
 def data_visualize(param):
     xml_path, im_p_l, im_p_h, img_name, con_1, con_2 = param
     img_path = '/'.join([FLAGS.img_output, img_name])
-    # print(FLAGS.img_v_output)
     img_v_path = '/'.join([FLAGS.img_v_output, img_name + '_v'])
     xml_output = '/'.join([FLAGS.xml_output, img_name])
 
@@ -41,7 +44,6 @@ def data_visualize(param):
         img = cv.imread(im_p_l)
         root = etree.parse(xml_path).getroot()
         boxes = root.xpath('//object/bndbox')
-        # size = root.xpath('//size')
         name = root.xpath('//object/name')
         con_2.append(len(boxes))
         group_box(img, boxes, con_1, xml_output, img_name, img_path, name, img_v_path)
@@ -77,15 +79,12 @@ def group_box_core(full_box, all_box, img, con, xml_output, img_name, img_path, 
     new_img_path = img_path + '_%d.jpg' % i
     new_img_v_path = img_v_path + '_%d.jpg' % i
 
-    # full_box = np.array(full_box)
-    # mini = full_box.min(axis=0)
     mini_index = full_box.argmin(axis=0)
     min_box = full_box[mini_index[0]]
     min_box = np.insert(min_box, 4, 0)
     min_x_cen = (min_box[0] + min_box[2]) / 2
     min_y_cen = (min_box[1] + min_box[3]) / 2
     group = np.zeros(shape=(1, 5))
-    # group[0] = min_box
     another_group = []
 
     # background sampling
@@ -134,7 +133,6 @@ def group_box_core(full_box, all_box, img, con, xml_output, img_name, img_path, 
 
     i += 1
     another_group = np.array(another_group)
-    # another_group = np.reshape(ne)
     if not len(another_group) == 0:
         group_box_core(another_group, all_box, img, con, xml_output, img_name, img_path, name, img_v_path, i)
 
@@ -238,15 +236,6 @@ def cut_img_bg(img, full_box):
 
 
 def cut_img(img, xcen, ycen, full_box, name):
-    """group = group[1:, :]
-    group_index = np.lexsort(group.T[:4, :])
-    group = group[group_index, :]
-    xmin = group[0][0]
-    ymin = group[0][1]
-    xmax = group[-1][2]
-    ymax = group[-1][3]
-    xcen = int((xmax + xmin) / 2)
-    ycen = int((ymax + ymin) / 2)"""
     # ADD DIVERTION
     rand = random.randint(-150, 150)
 
@@ -270,19 +259,6 @@ def cut_img(img, xcen, ycen, full_box, name):
     indent = '\t'
     form = newline + indent
     for box, n in zip(full_box, name):
-        '''bx_min = int(box[0] - (xcen - 304))
-        if bx_min < 0:
-            bx_min = 0
-        by_min = int(box[1] - (ycen - 304))
-        if by_min < 0:
-            by_min = 0
-        bx_max = int(box[2] - (xcen - 304))
-        if bx_max > 608:
-            bx_max = 608
-        by_max = int(box[3] - (ycen - 304))
-        if by_max > 608:
-            by_max = 608'''
-
         bx_cen = (box[0] + box[2]) / 2
         by_cen = (box[1] + box[3]) / 2
         b_l = box[2] - box[0]
@@ -364,11 +340,6 @@ def cut_img(img, xcen, ycen, full_box, name):
                 bndbox.tail = form
                 object_xml.append(bndbox)
 
-                '''if i <= (len(group) - 1):
-                    object_xml.tail = form
-                    annotation.append(object_xml)
-                else:
-                    # object_xml.tail = newline'''
                 annotation.append(object_xml)
 
                 width = bx_max - bx_min
@@ -382,7 +353,6 @@ def cut_img(img, xcen, ycen, full_box, name):
 
 def plot_result(num_bbox, bboxes):
     csv_path = FLAGS.csv_output
-    # print(csv_path)
 
     x1, y1 = np.unique(num_bbox, return_counts=True)
     csv_path_1 = '/'.join([csv_path, '_1.csv'])
@@ -399,12 +369,10 @@ def plot_result(num_bbox, bboxes):
     plt.title("The Distribution of BBoxes' amounts")
 
     plt.figure(num=2)
-    # print(bboxes)
     y2 = []
     for i in bboxes:
         for j in i:
             y2.append(j[0])
-    # print(y2)
     y2 = np.array(y2)
     y2 = np.sort(y2)
     x2 = np.arange(1, len(y2) + 1)
@@ -420,13 +388,10 @@ def plot_result(num_bbox, bboxes):
     plt.title("The Distribution of BBoxes' Size")
 
     plt.figure(num=4)
-    '''y4 = np.array([j[0][1] for j in [i for i in bboxes]])
-    print(y4)'''
     y4 = []
     for i in bboxes:
         for j in i:
             y4.append(j[1])
-    # print(y2)
     y4 = np.array(y4)
     y4 = np.sort(y4)
     x4 = np.arange(1, len(y4) + 1)
@@ -457,16 +422,13 @@ def main(_argv):
         im_p_l = os.path.join(FLAGS.img_path, img_name + '.jpg')
         im_p_h = os.path.join(FLAGS.img_path, img_name + '.JPG')
         datalist.append([xml_path, im_p_l, im_p_h, img_name, con_1, con_2])
-        # data_visualize([xml_path, im_p_l, im_p_h, img_name, [], []])
 
     p = Pool(multiprocessing.cpu_count() * 2)
-    # p = Pool(1)
     result = p.map(data_visualize, datalist)
     p.close()
     p.join()
     num_bbox = np.array(con_2)
     bboxes = np.array(con_1)
-    # print(bboxes)
     plot_result(num_bbox, bboxes)
 
 
