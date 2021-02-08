@@ -1,3 +1,13 @@
+"""
+Include function:
+    1. Read VOC xml file
+    2. Segment the high resolution image into low resolution (608*608)
+        2.1 A quarter of the images contain the bndbox
+        2.2 The bndboxes' coordinates are re-calculated
+        2.3 Three quarters of the images are pure background
+    3. Save the new data into VOC format
+"""
+
 import os
 import cv2 as cv
 import numpy as np
