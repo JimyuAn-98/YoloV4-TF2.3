@@ -1,0 +1,5 @@
+/data/log/
+/data/TEST/
+/data/yolov3.weights
+/data/yolov4.weights
+/data/dataset_pre-processing/image_cut.py
